@@ -7,19 +7,21 @@ class AnalysisService:
 
     @staticmethod
     def analyze_range(session, org_id: int, start: date, end: date):
+        # Use optimized adapter for better performance
         adapter = DBAdapter(session, org_id)
-        staff = adapter.load_staff()
-        shifts = adapter.load_shifts(start, end)
-        # build a mini-engine for analysis
-        from app.scheduler_engine.core.greedy_engine import GreedyEngine
-        engine = GreedyEngine()
-        for s in staff:
-            engine.add_staff(s)
-        for sh in shifts:
-            engine.add_shift(sh)
-        scorer = ScoringEngine()
-        summary = scorer.analyze_schedule(engine)
-        # return detailed metrics sample
+
+        # Use fast aggregate queries instead of building full engine
+        stats = adapter.get_coverage_stats_fast(start, end)
+
+        # Return summary in expected format
+        summary = {
+            "total_shifts": stats["total_shifts"],
+            "covered": stats["covered_shifts"],
+            "coverage_rate": stats["coverage_rate"],
+            "total_assignments": stats["total_assignments"],
+            "unique_staff": stats["unique_staff"]
+        }
+
         return {"ok": True, "summary": summary}
 
     @staticmethod

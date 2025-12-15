@@ -2,6 +2,8 @@
 from sqlmodel import Session, select
 from datetime import date
 from typing import List, Dict
+from sqlalchemy.orm import selectinload
+from sqlalchemy import and_, func
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -14,11 +16,18 @@ class DBAdapter:
         self.org_id = org_id
 
     def load_staff(self) -> List[EngineStaff]:
-        stmt = select(db_models.Staff).where(db_models.Staff.org_id == self.org_id)
+        """Optimized: Use eager loading to avoid N+1 queries for staff skills"""
+        # Load staff with their skills in one query
+        stmt = select(db_models.Staff).where(
+            db_models.Staff.org_id == self.org_id
+        ).options(
+            selectinload(db_models.Staff.skills)
+        )
         db_rows = self.session.exec(stmt).all()
         engines = []
         for r in db_rows:
-            skills = {ss.skill_id: ss.proficiency_level for ss in getattr(r, "skills", [])}
+            # Now skills are already loaded, no extra query needed
+            skills = {ss.skill_id: ss.proficiency_level for ss in r.skills}
             engines.append(EngineStaff(
                 employee_id=r.employee_id,
                 name=r.full_name,
@@ -32,81 +41,156 @@ class DBAdapter:
         return engines
 
     def load_shifts(self, start: date, end: date) -> List[EngineShift]:
-        stmt = select(db_models.Shift).where((db_models.Shift.org_id == self.org_id) & (db_models.Shift.shift_date >= start) & (db_models.Shift.shift_date <= end))
+        """Optimized: Use bulk queries to avoid N+1 problems for skills and assignments"""
+        # First, get all shifts in the date range
+        stmt = select(db_models.Shift).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        )
         db_shifts = self.session.exec(stmt).all()
+
+        if not db_shifts:
+            return []
+
+        # Get shift IDs for bulk loading
+        shift_ids = [s.id for s in db_shifts]
+
+        # Bulk load required skills for all shifts (1 query instead of N)
+        required_skills_stmt = select(db_models.ShiftRequiredSkill).where(
+            db_models.ShiftRequiredSkill.shift_id.in_(shift_ids)
+        )
+        required_skills = self.session.exec(required_skills_stmt).all()
+
+        # Bulk load assignments for all shifts (1 query instead of N)
+        assignments_stmt = select(db_models.ShiftAssignment).where(
+            db_models.ShiftAssignment.shift_id.in_(shift_ids)
+        )
+        assignments = self.session.exec(assignments_stmt).all()
+
+        # Group data by shift for quick lookup (O(1) access)
+        skills_by_shift = {}
+        for rs in required_skills:
+            if rs.shift_id not in skills_by_shift:
+                skills_by_shift[rs.shift_id] = []
+            skills_by_shift[rs.shift_id].append(rs.skill_id)
+
+        assignments_by_shift = {}
+        for assignment in assignments:
+            if assignment.shift_id not in assignments_by_shift:
+                assignments_by_shift[assignment.shift_id] = []
+            assignments_by_shift[assignment.shift_id].append(assignment.employee_id)
+
+        # Build EngineShift objects with pre-loaded data
         engines = []
         for s in db_shifts:
-            required_skill_ids = [rs.skill_id for rs in getattr(s, "required_skills", [])]
             engines.append(EngineShift(
                 id=s.id,
                 shift_date=s.shift_date,
                 shift_type=s.shift_type,
                 department_id=s.department_id,
-                required_skill_ids=required_skill_ids,
+                required_skill_ids=skills_by_shift.get(s.id, []),
                 min_staff=s.min_staff,
                 max_staff=s.max_staff,
                 priority=getattr(s, "priority", 1),
                 requires_supervisor=getattr(s, "requires_supervisor", False),
                 hours=getattr(s, "hours", 8),
-                assigned_staff_ids=[a.employee_id for a in getattr(s, "assignments", [])]
+                assigned_staff_ids=assignments_by_shift.get(s.id, [])
             ))
         return engines
 
     def load_leaves(self, start: date, end: date) -> List[EngineLeave]:
-        stmt = select(db_models.LeaveRequest).join(db_models.Staff).where((db_models.Staff.org_id == self.org_id) & (db_models.LeaveRequest.end_date >= start) & (db_models.LeaveRequest.start_date <= end))
+        stmt = select(db_models.LeaveRequest).join(db_models.Staff).where(
+            and_(
+                db_models.Staff.org_id == self.org_id,
+                db_models.LeaveRequest.end_date >= start,
+                db_models.LeaveRequest.start_date <= end
+            )
+        )
         db_leaves = self.session.exec(stmt).all()
-        engines = [EngineLeave(id=l.id, employee_id=l.employee_id, start_date=l.start_date, end_date=l.end_date, status=l.status, leave_type=l.leave_type) for l in db_leaves]
+        engines = [
+            EngineLeave(
+                id=l.id,
+                employee_id=l.employee_id,
+                start_date=l.start_date,
+                end_date=l.end_date,
+                status=l.status,
+                leave_type=l.leave_type
+            )
+            for l in db_leaves
+        ]
         return engines
 
-    def persist_assignments(self, engine_shifts: List[EngineShift]) -> Dict:
-        """
-        Write engine assignments to DB.
-        - For each engine shift, ensure DB shift exists.
-        - Delete existing assignments for that shift and insert new ones.
-        Returns detailed result: counts + per-shift assignment lists.
-        """
-        result = {"updated_shifts": 0, "updated_assignments": 0, "shifts": []}
-        try:
-            for eng in engine_shifts:
-                db_shift = self.session.get(db_models.Shift, eng.id)
-                if not db_shift:
-                    # If DB shift missing, skip but report it (this is unusual)
-                    result["shifts"].append({
-                        "shift_id": eng.id,
-                        "status": "missing_db_shift",
-                        "assigned_staff": eng.assigned_staff_ids
-                    })
-                    continue
+    def load_assignments_bulk(self, start: date, end: date) -> List[db_models.ShiftAssignment]:
+        """Bulk load assignments with shift details in a single query"""
+        stmt = select(db_models.ShiftAssignment).join(db_models.Shift).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        ).options(
+            selectinload(db_models.ShiftAssignment.shift),
+            selectinload(db_models.ShiftAssignment.staff)
+        )
+        return self.session.exec(stmt).all()
 
-                # Delete existing assignments for this shift (bulk)
-                stmt = select(db_models.ShiftAssignment).where(db_models.ShiftAssignment.shift_id == db_shift.id)
-                existing = self.session.exec(stmt).all()
-                for ex in existing:
-                    self.session.delete(ex)
-                self.session.commit()
+    def get_coverage_stats_fast(self, start: date, end: date) -> Dict:
+        """Get coverage statistics using aggregate queries for maximum performance"""
+        # Total shifts
+        total_shifts_stmt = select(func.count(db_models.Shift.id)).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        )
+        total_shifts = self.session.exec(total_shifts_stmt).one()
 
-                inserted = []
-                for emp_id in eng.assigned_staff_ids:
-                    assign = db_models.ShiftAssignment(
-                        shift_id=db_shift.id,
-                        employee_id=emp_id,
-                        assigned_hours=eng.hours
-                    )
-                    self.session.add(assign)
-                    inserted.append({"employee_id": emp_id, "assigned_hours": eng.hours})
+        # Covered shifts (shifts with at least one assignment)
+        covered_shifts_stmt = select(func.count(func.distinct(db_models.ShiftAssignment.shift_id))).join(
+            db_models.Shift
+        ).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        )
+        covered_shifts = self.session.exec(covered_shifts_stmt).one() or 0
 
-                self.session.commit()
-                result["updated_shifts"] += 1
-                result["updated_assignments"] += len(inserted)
-                result["shifts"].append({
-                    "shift_id": db_shift.id,
-                    "date": db_shift.shift_date.isoformat() if getattr(db_shift, "shift_date", None) else None,
-                    "assigned": inserted
-                })
+        # Total assignments
+        total_assignments_stmt = select(func.count(db_models.ShiftAssignment.id)).join(
+            db_models.Shift
+        ).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        )
+        total_assignments = self.session.exec(total_assignments_stmt).one() or 0
 
-        except SQLAlchemyError as e:
-            # Rollback and bubble up
-            self.session.rollback()
-            raise
+        # Unique staff
+        unique_staff_stmt = select(func.count(func.distinct(db_models.ShiftAssignment.employee_id))).join(
+            db_models.Shift
+        ).where(
+            and_(
+                db_models.Shift.org_id == self.org_id,
+                db_models.Shift.shift_date >= start,
+                db_models.Shift.shift_date <= end
+            )
+        )
+        unique_staff = self.session.exec(unique_staff_stmt).one() or 0
 
-        return result
+        coverage_rate = (covered_shifts / total_shifts * 100) if total_shifts > 0 else 100
+
+        return {
+            "total_shifts": total_shifts,
+            "covered_shifts": covered_shifts,
+            "total_assignments": total_assignments,
+            "unique_staff": unique_staff,
+            "coverage_rate": coverage_rate
+        }

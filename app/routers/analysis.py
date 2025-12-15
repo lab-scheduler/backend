@@ -28,6 +28,7 @@ def parse_dates(start: str, end: str):
 def analysis_range(org_slug: str, start: str, end: str,
                    detailed: bool = Query(False, description="Return comprehensive detailed analysis"),
                    session: Session = Depends(get_session),
+                #    credentials: HTTPAuthorizationCredentials = Security(security),
                    current: dict = Depends(get_current_user)):
 
     org = get_org_by_slug(org_slug, session)
