@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
             "email": "email@biologic.com",
         },
         servers=[
-            {"url": "http://localhost:8000", "description": "Development server"},
+            {"url": "/"}
         ],
     )
 
@@ -73,14 +73,18 @@ def create_app() -> FastAPI:
     # CORS SECURITY
     # -------------------------------------------------------------------
     # ⚠️ Untuk production, ganti * ke domain tertentu!
+    
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],            # TODO: restrict in production
+        allow_origins=[
+            "http://localhost:3000",
+            "https://lab-scheduler.vercel.app",   # frontend nanti
+            "https://lab-scheduler.up.railway.app"
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
     # -------------------------------------------------------------------
     # ROUTER REGISTRY (CLEAN & ORGANIZED)
     # -------------------------------------------------------------------
