@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=[
             "http://localhost:3000",
-            "https://lab-scheduler.vercel.app",   # frontend nanti
+            "http://lab-scheduler-ten.vercel.app",   # frontend nanti
             "https://lab-scheduler.up.railway.app"
         ],
         allow_credentials=True,
