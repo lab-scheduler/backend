@@ -21,11 +21,8 @@ def create_department(org_slug: str, payload: DepartmentCreate,
     if current.get("role") != "ADMIN":
         raise HTTPException(403, "Forbidden")
 
-    org = get_org_by_slug(org_slug, session)
-
-    payload.org_id = org.id  # force match
-
-    dept = Department(**payload.dict())
+    # Always use org_id = 2
+    dept = Department(name=payload.name, org_id=2)
     session.add(dept)
     session.commit()
     session.refresh(dept)

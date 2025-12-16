@@ -85,7 +85,6 @@ class OrganizationRead(SQLModel):
 # ============================================================
 
 class DepartmentCreate(SQLModel):
-    org_id: int
     name: str
 
 

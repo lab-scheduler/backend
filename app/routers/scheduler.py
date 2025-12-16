@@ -53,13 +53,22 @@ def run_monthly(org_slug: str, payload: dict = None, session: Session = Depends(
     return result
 
 @router.post("/run")
-def run_enhanced_schedule(org_slug: str, payload: dict, session: Session = Depends(get_session), current: dict = Depends(get_current_user)):
+def run_enhanced_schedule(org_slug: str, payload: dict = None, session: Session = Depends(get_session), current: dict = Depends(get_current_user)):
     if current.get("role") not in ("MANAGER", "ADMIN"):
         raise HTTPException(403, "Forbidden")
     org = get_org_by_slug(org_slug, session)
 
+    # Validate payload exists
+    if not payload:
+        raise HTTPException(400, "Request body is required with 'start_date' and 'end_date' fields")
+
     start = payload.get("start_date")
     end = payload.get("end_date")
+    
+    # Validate required fields
+    if not start or not end:
+        raise HTTPException(400, "Both 'start_date' and 'end_date' are required in the request body")
+    
     use_cpsat = bool(payload.get("use_cpsat", False))
     cpsat_time = int(payload.get("cpsat_time", 30))
     max_shifts_per_day = payload.get("max_shifts_per_day", 1)

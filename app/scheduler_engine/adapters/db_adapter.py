@@ -194,3 +194,70 @@ class DBAdapter:
             "unique_staff": unique_staff,
             "coverage_rate": coverage_rate
         }
+
+    def persist_assignments(self, shifts: List) -> Dict:
+        """
+        Persist shift assignments to the database.
+        Clears existing assignments for the given shifts and creates new ones.
+        
+        Args:
+            shifts: List of EngineShift objects with assigned_staff_ids populated
+            
+        Returns:
+            Dict with persist results including shift details
+        """
+        try:
+            shift_results = []
+            total_assignments = 0
+            
+            for shift in shifts:
+                # Get shift ID
+                shift_id = shift.id
+                
+                # Delete existing assignments for this shift
+                delete_stmt = select(db_models.ShiftAssignment).where(
+                    db_models.ShiftAssignment.shift_id == shift_id
+                )
+                existing_assignments = self.session.exec(delete_stmt).all()
+                for assignment in existing_assignments:
+                    self.session.delete(assignment)
+                
+                # Create new assignments
+                assignments_created = 0
+                for employee_id in shift.assigned_staff_ids:
+                    # Get the shift to determine hours
+                    db_shift = self.session.get(db_models.Shift, shift_id)
+                    hours = getattr(db_shift, 'hours', 8) if db_shift else 8
+                    
+                    assignment = db_models.ShiftAssignment(
+                        shift_id=shift_id,
+                        employee_id=employee_id,
+                        assigned_hours=hours
+                    )
+                    self.session.add(assignment)
+                    assignments_created += 1
+                    total_assignments += 1
+                
+                shift_results.append({
+                    "shift_id": shift_id,
+                    "shift_date": shift.shift_date.isoformat(),
+                    "assignments_created": assignments_created,
+                    "assigned_staff": list(shift.assigned_staff_ids)
+                })
+            
+            # Commit all changes
+            self.session.commit()
+            
+            return {
+                "ok": True,
+                "shifts": shift_results,
+                "total_assignments": total_assignments,
+                "total_shifts": len(shifts)
+            }
+            
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise Exception(f"Database error while persisting assignments: {str(e)}")
+        except Exception as e:
+            self.session.rollback()
+            raise Exception(f"Error persisting assignments: {str(e)}")
