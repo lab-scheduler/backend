@@ -1,5 +1,6 @@
 # app/services/shift_service.py
 from sqlmodel import Session, select
+from sqlalchemy.orm import joinedload
 from datetime import date
 from typing import List, Optional
 
@@ -75,6 +76,13 @@ class ShiftService:
             select(Shift)
             .join(Department, Shift.department_id == Department.id)
             .where(Department.org_id == org_id)
+            .options(
+                joinedload(Shift.required_skills).joinedload(ShiftRequiredSkill.skill),
+                # Load department details
+                joinedload(Shift.department),
+                # Uncomment if you need assignments in the response
+                # joinedload(Shift.assignments)
+            )
         )
 
         if start:
@@ -82,7 +90,8 @@ class ShiftService:
         if end:
             stmt = stmt.where(Shift.shift_date <= end)
 
-        return session.exec(stmt).all()
+        # Use unique() to deduplicate results from JOINs
+        return session.exec(stmt).unique().all()
 
     # ---------------------------------------------------------
     # BUILD SERIALIZED REQUIRED SKILLS
