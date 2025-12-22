@@ -81,7 +81,8 @@ def create_app() -> FastAPI:
             "http://localhost:5173",
             "https://lab-scheduler-ten.vercel.app",   # frontend nanti
             "https://lab-scheduler.up.railway.app",
-            "https://lab-scheduler-backend-7xe8.onrender.com"
+            "https://lab-scheduler-backend-7xe8.onrender.com",
+            "https://lab-scheduler-frontend.onrender.com"
         ],
         allow_credentials=True,
         allow_methods=["*"],
