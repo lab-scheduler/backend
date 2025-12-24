@@ -240,3 +240,29 @@ class PipelineRequiredSkill(SQLModel, table=True):
     pipeline: "WorkPipeline" = Relationship(back_populates="required_skills")
     skill: "Skill" = Relationship()
 
+
+class ShiftTemplate(SQLModel, table=True):
+    __tablename__ = "shift_templates"
+    __table_args__ = get_table_args()
+
+    id: int = Field(primary_key=True)
+    org_id: int = Field(sa_column=Column(ForeignKey("scheduler_dev.organizations.id")))
+    name: str = Field(index=True)
+    description: Optional[str] = None
+    created_by: Optional[str] = Field(default=None, sa_column=Column(ForeignKey("scheduler_dev.staff.employee_id")))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Template configuration stored as JSON
+    # Contains department rules and pipeline rules
+    config: dict = Field(sa_column=Column(JSON))
+    
+    # Metadata for tracking usage
+    is_active: bool = Field(default=True)
+    last_used: Optional[datetime] = None
+    use_count: int = Field(default=0)
+    
+    # Relationships
+    organization: Organization = Relationship()
+    creator: Optional[Staff] = Relationship()
+

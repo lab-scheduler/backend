@@ -15,6 +15,7 @@ from app.routers.scheduler import router as scheduler_router
 from app.routers.analysis import router as analysis_router
 # from app.routers.demo import router as demo_router
 from app.routers.shift_generator import router as shift_generator_router
+from app.routers.shift_template import router as shift_template_router
 
 # (New) Additional routers you will add
 from app.routers.organization import router as organization_router
@@ -35,6 +36,7 @@ tags_metadata = [
     {"name": "Scheduler", "description": "Auto-scheduling and optimization"},
     {"name": "Analysis", "description": "Generate scheduling analysis reports"},
     {"name": "Staff Skills", "description": "Manage skills assigned to staff members"},
+    {"name": "Shift Templates", "description": "Manage reusable shift generation templates"},
     # {"name": "Demo", "description": "Demo utilities and testing modules"},
 ]
 
@@ -109,6 +111,7 @@ def create_app() -> FastAPI:
     app.include_router(skill_staff_router, prefix=f"{API_PREFIX}")
     app.include_router(shift_router, prefix=f"{API_PREFIX}")
     app.include_router(shift_generator_router, prefix=f"{API_PREFIX}")
+    app.include_router(shift_template_router, prefix=f"{API_PREFIX}")
 
     # Demo tools
     # app.include_router(demo_router, prefix=f"{API_PREFIX}/demo")

@@ -26,18 +26,30 @@ class ShiftGeneratorService:
             cur = start + timedelta(days=day_i)
 
             for rule in dept_rules:
+                # Validate required fields
+                if not isinstance(rule, dict):
+                    raise ValueError(f"Invalid department rule: expected dict, got {type(rule)}")
+                
+                if "department_id" not in rule:
+                    raise ValueError(f"Missing 'department_id' in department rule: {rule}")
+                
                 dept_id = rule["department_id"]
+                shift_types = rule.get("shift_types", ["DAY"])
+                min_staff = rule.get("min_staff", 1)
+                max_staff = rule.get("max_staff", 1)
+                priority = rule.get("priority", 1)
+                hours = rule.get("hours", 8)
 
-                for stype in rule["shift_types"]:
+                for stype in shift_types:
                     shift = Shift(
                         org_id=org_id,
                         shift_date=cur,
                         shift_type=stype,
                         department_id=dept_id,
-                        min_staff=rule["min_staff"],
-                        max_staff=rule["max_staff"],
-                        priority=rule["priority"],
-                        hours=8
+                        min_staff=min_staff,
+                        max_staff=max_staff,
+                        priority=priority,
+                        hours=hours
                     )
                     session.add(shift)
                     session.commit()

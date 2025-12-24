@@ -251,4 +251,47 @@ class LeaveRead(SQLModel):
     approved_at: Optional[datetime]
 
 
+# ============================================================
+# SHIFT TEMPLATE SCHEMAS
+# ============================================================
+
+class ShiftTemplateCreate(SQLModel):
+    name: str
+    description: Optional[str] = None
+    config: dict  # Contains departments and pipelines rules
+
+
+class ShiftTemplateUpdate(SQLModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    config: Optional[dict] = None
+    is_active: Optional[bool] = None
+
+
+class ShiftTemplateRead(SQLModel):
+    id: int
+    org_id: int
+    name: str
+    description: Optional[str]
+    created_by: Optional[str]  # Optional for ADMIN users
+    created_at: datetime
+    updated_at: datetime
+    config: dict
+    is_active: bool
+    last_used: Optional[datetime]
+    use_count: int
+
+
+class ShiftTemplateApply(SQLModel):
+    start_date: date
+    end_date: date
+    overrides: Optional[dict] = None  # Optional modifications to template config
+
+
+class ShiftTemplateFromHistory(SQLModel):
+    name: str
+    description: Optional[str] = None
+    source_start_date: date
+    source_end_date: date
+    department_id: Optional[int] = None  # If None, extract from all departments
 

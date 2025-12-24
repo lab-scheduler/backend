@@ -1,4 +1,3 @@
-# app/scheduler_engine/core/scoring_engine.py
 from typing import Dict
 from datetime import date
 from math import fabs

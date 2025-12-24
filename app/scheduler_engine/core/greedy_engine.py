@@ -1,4 +1,3 @@
-# app/scheduler_engine/core/greedy_engine.py
 from datetime import date, timedelta
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
@@ -19,7 +18,6 @@ class SchedulingConflict:
 
 class GreedyEngine:
     """
-    Greedy scheduling engine — a cleaned, modular version of your scheduler.py logic.
     Implements:
       - assign_staff_to_shift
       - auto_schedule_shift
@@ -153,7 +151,6 @@ class GreedyEngine:
         conflicts_by_date = defaultdict(list)
 
         # First pass: Remove any staff on leave from their assigned shifts
-        # This ensures staff on approved leave don't remain assigned
         for sh in shifts:
             # Check each assigned staff member
             staff_to_remove = []
@@ -176,8 +173,6 @@ class GreedyEngine:
                 self.staff_hours[staff_id][sh.shift_date] = max(0, self.staff_hours[staff_id][sh.shift_date] - sh.hours)
 
         # Second pass: Schedule shifts that need more staff
-        # This includes shifts that were understaffed to begin with AND
-        # shifts that became understaffed after removing staff on leave
         for sh in shifts:
             if len(sh.assigned_staff_ids) < sh.min_staff:
                 confs = self.auto_schedule_shift(sh)
