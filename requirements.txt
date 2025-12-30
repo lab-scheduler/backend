@@ -19,8 +19,7 @@ PyJWT>=2.0.0
 email-validator>=2.0.0
 
 # Optimization
-# ortools>=9.9.2534
-ortools
+ortools>=9.9.2534
 
 # HTTP & Forms
 httpx>=0.24.0
