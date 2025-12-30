@@ -28,7 +28,6 @@ def create_access_token(data: dict):
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM), int((expire - datetime.utcnow()).total_seconds())
 
 
-# def get_current_user(token: str = Depends(oauth2_scheme)):
 def get_current_user(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

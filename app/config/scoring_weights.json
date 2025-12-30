@@ -1,0 +1,25 @@
+{
+  "description": "Configurable scoring weights for the scheduler engine",
+  "version": "1.0",
+  "weights": {
+    "preferred_shift_bonus": 10.0,
+    "skill_level_multiplier": 5.0,
+    "skill_match_base": 20.0,
+    "supervisor_bonus": 15.0,
+    "department_familiarity": 5.0,
+    "consecutive_day_penalty": -3.0,
+    "overtime_penalty": -5.0,
+    "weekend_penalty": -2.0
+  },
+  "constraints": {
+    "max_consecutive_days": 6,
+    "max_hours_per_week": 48,
+    "min_rest_hours": 12
+  },
+  "notes": [
+    "Positive values increase likelihood of assignment",
+    "Negative values decrease likelihood of assignment",
+    "Multipliers are applied to base scores",
+    "All weights can be adjusted without code changes"
+  ]
+}

@@ -257,7 +257,7 @@ class DBAdapter:
             
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise Exception(f"Database error while persisting assignments: {str(e)}")
-        except Exception as e:
+            raise ValueError(f"Database error while persisting assignments: {str(e)}")
+        except (ValueError, TypeError, AttributeError) as e:
             self.session.rollback()
-            raise Exception(f"Error persisting assignments: {str(e)}")
+            raise ValueError(f"Error persisting assignments: {str(e)}")

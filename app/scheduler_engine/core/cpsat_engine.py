@@ -3,7 +3,7 @@ from datetime import timedelta
 try:
     from ortools.sat.python import cp_model
     ORTOOLS_AVAILABLE = True
-except Exception:
+except (ImportError, ModuleNotFoundError):
     ORTOOLS_AVAILABLE = False
 
 from app.scheduler_engine.adapters.model_mapper import EngineShift, EngineStaff

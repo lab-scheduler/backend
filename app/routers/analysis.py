@@ -44,29 +44,6 @@ def analysis_range(org_slug: str, start: str, end: str,
         return {"ok": True, "data": result}
 
 
-# # ---------------------------------------------------------
-# # COMPREHENSIVE RANGE ANALYSIS (NEW)
-# # ---------------------------------------------------------
-# @router.get("/range/comprehensive", dependencies=[Security(security)])
-# def analysis_range_comprehensive(org_slug: str, start: str, end: str,
-#                                 session: Session = Depends(get_session),
-#                                 current: dict = Depends(get_current_user)):
-#     """
-#     Comprehensive analysis endpoint that returns full details including:
-#     - Executive summary with key metrics
-#     - Detailed department breakdowns
-#     - Complete staff analysis
-#     - Full shift details with assignments
-#     - Advanced analytics and insights
-#     - Actionable recommendations
-#     """
-#     org = get_org_by_slug(org_slug, session)
-#     s, e = parse_dates(start, end)
-
-#     result = EnhancedAnalysisService.get_comprehensive_analysis(session, org.id, s, e)
-#     return {"ok": True, "data": result}
-
-
 # ---------------------------------------------------------
 # ANALYSIS PER STAFF
 # ---------------------------------------------------------

@@ -1,54 +1,73 @@
 # app/services/organization_service.py
-from sqlmodel import Session, select
+from sqlmodel import Session
 from app.db.models import Organization
 from app.schemas import OrganizationCreate
-from datetime import datetime
+from app.services.base_service import BaseCRUDService
+from typing import Dict, Any
 
 
-class OrganizationService:
+class OrganizationService(BaseCRUDService[Organization]):
+    """
+    Organization service with custom slug generation.
+    Inherits standard CRUD operations from BaseCRUDService.
+    """
+    
+    def __init__(self):
+        super().__init__(Organization)
+    
+    def create(self, session: Session, data: OrganizationCreate) -> Organization:
+        """Create organization with auto-generated slug"""
+        slug = data.name.lower().replace(" ", "-")
+        org_data = {
+            "name": data.name,
+            "address": data.address,
+            "slug": slug
+        }
+        return super().create(session, org_data)
+    
+    def update(self, session: Session, org_id: int, data: OrganizationCreate) -> Organization:
+        """Update organization with auto-generated slug"""
+        slug = data.name.lower().replace(" ", "-")
+        org_data = {
+            "name": data.name,
+            "address": data.address,
+            "slug": slug
+        }
+        return super().update(session, org_id, org_data)
+    
+    # Inherited methods (no need to redefine):
+    # - get(session, id) -> Optional[Organization]
+    # - list_all(session, skip=0, limit=100) -> List[Organization]
+    # - delete(session, id) -> bool
+    # - exists(session, id) -> bool
 
+
+# Convenience instance for backward compatibility
+_service = OrganizationService()
+
+# Static method wrappers for existing code compatibility
+class OrganizationServiceCompat:
     @staticmethod
     def create(session: Session, data: OrganizationCreate):
-        slug = data.name.lower().replace(" ", "-")
-        org = Organization(
-            name=data.name,
-            address=data.address,
-            slug=slug
-        )
-        session.add(org)
-        session.commit()
-        session.refresh(org)
-        return org
-
+        return _service.create(session, data)
+    
     @staticmethod
     def list(session: Session):
-        return session.exec(select(Organization)).all()
-
+        return _service.list_all(session)
+    
     @staticmethod
     def get(session: Session, org_id: int):
-        return session.get(Organization, org_id)
-
+        return _service.get(session, org_id)
+    
     @staticmethod
     def update(session: Session, org_id: int, data: OrganizationCreate):
-        org = session.get(Organization, org_id)
-        if not org:
-            return None
-        
-        org.name = data.name
-        org.address = data.address
-        org.slug = data.name.lower().replace(" ", "-")
-
-        session.add(org)
-        session.commit()
-        session.refresh(org)
-        return org
-
+        return _service.update(session, org_id, data)
+    
     @staticmethod
     def delete(session: Session, org_id: int):
-        org = session.get(Organization, org_id)
-        if not org:
-            return False
+        return _service.delete(session, org_id)
 
-        session.delete(org)
-        session.commit()
-        return True
+
+# Export compatibility layer as default
+OrganizationService = OrganizationServiceCompat
+

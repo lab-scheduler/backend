@@ -1,49 +1,49 @@
 # app/services/department_service.py
-from sqlmodel import Session, select
+from sqlmodel import Session
 from app.db.models import Department
 from app.schemas import DepartmentCreate
+from app.services.base_service import BaseCRUDService
 
 
+class DepartmentServiceCore(BaseCRUDService[Department]):
+    """
+    Department service inheriting standard CRUD from BaseCRUDService.
+    """
+    
+    def __init__(self):
+        super().__init__(Department)
+    
+    # All CRUD methods inherited from BaseCRUDService:
+    # - create(session, data) -> Department
+    # - get(session, id) -> Optional[Department]
+    # - list_by(session, skip=0, limit=100, **filters) -> List[Department]
+    # - update(session, id, data) -> Optional[Department]
+    # - delete(session, id) -> bool
+
+
+# Convenience instance
+_service = DepartmentServiceCore()
+
+
+# Static method wrappers for backward compatibility
 class DepartmentService:
-
     @staticmethod
     def create(session: Session, data: DepartmentCreate):
-        dept = Department(**data.dict())
-        session.add(dept)
-        session.commit()
-        session.refresh(dept)
-        return dept
-
+        return _service.create(session, data.dict())
+    
     @staticmethod
     def list(session: Session, org_id: int):
-        return session.exec(
-            select(Department).where(Department.org_id == org_id)
-        ).all()
-
+        return _service.list_by(session, org_id=org_id, limit=1000)
+    
     @staticmethod
     def get(session: Session, dept_id: int):
-        return session.get(Department, dept_id)
-
+        return _service.get(session, dept_id)
+    
     @staticmethod
     def update(session: Session, dept_id: int, data: DepartmentCreate):
-        dept = session.get(Department, dept_id)
-        if not dept:
-            return None
-
-        dept.name = data.name
-        dept.org_id = data.org_id
-
-        session.add(dept)
-        session.commit()
-        session.refresh(dept)
-        return dept
-
+        return _service.update(session, dept_id, data.dict())
+    
     @staticmethod
     def delete(session: Session, dept_id: int):
-        dept = session.get(Department, dept_id)
-        if not dept:
-            return False
+        return _service.delete(session, dept_id)
 
-        session.delete(dept)
-        session.commit()
-        return True

@@ -85,14 +85,14 @@ class SchedulerOrchestrator:
                             assign_map.setdefault(a["shift_id"], []).append(a["employee_id"])
                         for sh in shifts:
                             sh.assigned_staff_ids = assign_map.get(sh.id, sh.assigned_staff_ids)
-                except Exception as e:
+                except (ValueError, RuntimeError, TypeError, AttributeError) as e:
                     out["cpsat"] = {"ok": False, "error": str(e)}
 
         # 8) persist assignments to DB and get detailed result
         try:
             persist_result = adapter.persist_assignments(shifts)
             out["persist_result"] = persist_result
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             out["ok"] = False
             out["reason"] = f"DB persist failed: {str(e)}"
             return out
