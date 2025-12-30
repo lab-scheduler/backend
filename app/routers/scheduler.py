@@ -7,28 +7,11 @@ from app.core.security import get_current_user
 from app.utils.organization_lookup import get_org_by_slug
 from app.services.scheduler_service import SchedulerService
 from app.services.enhanced_scheduler_service import EnhancedSchedulerService
+from app.validators.scheduling_validators import ScheduleRequestValidator
+from pydantic import ValidationError
 
 router = APIRouter(prefix="/{org_slug}/schedule", tags=["Scheduler"])
 security = HTTPBearer()
-
-# @router.post("/run")
-# def run_schedule(org_slug: str, payload: dict, session: Session = Depends(get_session), current: dict = Depends(get_current_user)):
-#     if current.get("role") not in ("MANAGER", "ADMIN"):
-#         raise HTTPException(403, "Forbidden")
-#     org = get_org_by_slug(org_slug, session)
-#     start = payload.get("start_date")
-#     end = payload.get("end_date")
-#     use_cpsat = bool(payload.get("use_cpsat", False))
-#     try:
-#         from datetime import date
-#         s = date.fromisoformat(start)
-#         e = date.fromisoformat(end)
-#     except Exception:
-#         raise HTTPException(400, "Invalid date")
-#     result = SchedulerService.run_schedule(session, org.id, s, e, use_cpsat=use_cpsat, cpsat_time=payload.get("cpsat_time", 30))
-#     if not result.get("ok"):
-#         raise HTTPException(400, result.get("reason"))
-#     return result
 
 @router.post("/run-weekly")
 def run_weekly(org_slug: str, payload: dict = None, session: Session = Depends(get_session), current: dict = Depends(get_current_user)):

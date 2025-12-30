@@ -51,10 +51,11 @@ class LeaveService:
         return session.exec(select(LeaveRequest).where(LeaveRequest.leave_code == code)).first()
 
     @staticmethod
-    def list_by_org(session: Session, org_id: int):
+    def list_by_org(session: Session, org_id: int, skip: int = 0, limit: int = 50):
         from sqlmodel import select
         from app.db.models import Staff
-        return session.exec(select(LeaveRequest).join(Staff).where(Staff.org_id == org_id)).all()
+        stmt = select(LeaveRequest).join(Staff).where(Staff.org_id == org_id).offset(skip).limit(limit)
+        return session.exec(stmt).all()
 
     @staticmethod
     def list_by_status(session: Session, org_id: int, status):

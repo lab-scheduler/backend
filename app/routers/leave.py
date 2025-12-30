@@ -9,6 +9,7 @@ from app.utils.organization_lookup import get_org_by_slug
 from app.schemas import LeaveCreate, LeaveRead, LeaveStatus
 from app.services.leave_service import LeaveService
 from app.services.staff_service import StaffService
+from app.core.logging import scheduler_logger
 
 router = APIRouter(prefix="/{org_slug}/leaves", tags=["Leaves"])
 security = HTTPBearer()
@@ -112,13 +113,26 @@ def poll_leave(org_slug: str, leave_code: str,
 # ---------------------------------------------------------
 @router.get("", dependencies=[Security(security)])
 def list_leaves(org_slug: str,
+                skip: int = 0,
+                limit: int = 50,
                 session: Session = Depends(get_session),
                 current: dict = Depends(get_current_user)):
     if current.get("role") not in ("MANAGER", "ADMIN"):
         raise HTTPException(403, "Forbidden")
 
     org = get_org_by_slug(org_slug, session)
-    leaves = LeaveService.list_by_org(session, org.id)
+    
+    # Get total count
+    from sqlmodel import select, func
+    from app.db.models import LeaveRequest, Staff
+    
+    total_count_stmt = select(func.count(LeaveRequest.id)).join(Staff).where(
+        Staff.org_id == org.id
+    )
+    total = session.exec(total_count_stmt).one()
+    
+    # Get paginated leaves
+    leaves = LeaveService.list_by_org(session, org.id, skip=skip, limit=limit)
 
     # Convert LeaveRequest objects to dict to ensure all fields are included
     leaves_data = []
@@ -139,7 +153,13 @@ def list_leaves(org_slug: str,
 
     return {
         "ok": True,
-        "data": leaves_data
+        "data": leaves_data,
+        "pagination": {
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + len(leaves_data)) < total
+        }
     }
 
 
@@ -215,35 +235,50 @@ def review_leave(org_slug: str, leave_code: str, payload: dict,
         new_status,
         approver=current.get("employee_id"),
     )
+    
+    # Log the leave action
+    scheduler_logger.log_leave_action(
+        action="approve" if action == "approve" else "reject",
+        leave_code=leave_code,
+        employee_id=lr.employee_id,
+        approver_id=current.get("employee_id"),
+        metadata={"new_status": new_status, "leave_type": lr.leave_type}
+    )
 
     # If approved, remove staff from shift assignments during leave period
     if new_status == LeaveStatus.APPROVED and lr:
-        # Get all shift assignments for this staff within the leave dates
-        from sqlmodel import select
-        from app.db.models import ShiftAssignment, Shift
+        try:
+            # Get all shift assignments for this staff within the leave dates
+            from sqlmodel import select
+            from app.db.models import ShiftAssignment, Shift
 
-        # Find shifts during the leave period
-        shifts_query = select(Shift).where(
-            Shift.shift_date >= lr.start_date,
-            Shift.shift_date <= lr.end_date
-        )
-        shifts_in_leave_period = session.exec(shifts_query).all()
-
-        # Remove assignments for this staff from those shifts
-        removed_count = 0
-        for shift in shifts_in_leave_period:
-            assignments_query = select(ShiftAssignment).where(
-                ShiftAssignment.shift_id == shift.id,
-                ShiftAssignment.employee_id == lr.employee_id
+            # Find shifts during the leave period
+            shifts_query = select(Shift).where(
+                Shift.shift_date >= lr.start_date,
+                Shift.shift_date <= lr.end_date
             )
-            assignments = session.exec(assignments_query).all()
+            shifts_in_leave_period = session.exec(shifts_query).all()
 
-            for assignment in assignments:
-                session.delete(assignment)
-                removed_count += 1
+            # Remove assignments for this staff from those shifts
+            removed_count = 0
+            for shift in shifts_in_leave_period:
+                assignments_query = select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == shift.id,
+                    ShiftAssignment.employee_id == lr.employee_id
+                )
+                assignments = session.exec(assignments_query).all()
 
-        if removed_count > 0:
-            session.commit()
+                for assignment in assignments:
+                    session.delete(assignment)
+                    removed_count += 1
+
+            if removed_count > 0:
+                session.commit()
+                
+        except Exception as e:
+            # Rollback on any error
+            session.rollback()
+            raise HTTPException(500, f"Failed to remove shift assignments: {str(e)}")
 
     response = {
         "ok": True,

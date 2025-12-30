@@ -1,55 +1,54 @@
 # app/services/skill_service.py
-from sqlmodel import Session, select
-from app.db.models import Skill, Department
+from sqlmodel import Session
+from app.db.models import Skill
 from app.schemas import SkillCreate
+from app.services.base_service import BaseCRUDService
 
 
+class SkillServiceCore(BaseCRUDService[Skill]):
+    """
+    Skill service inheriting standard CRUD from BaseCRUDService.
+    """
+    
+    def __init__(self):
+        super().__init__(Skill)
+    
+    # All CRUD methods inherited from BaseCRUDService
+
+
+# Convenience instance
+_service = SkillServiceCore()
+
+
+# Static method wrappers for backward compatibility
 class SkillService:
-
     @staticmethod
     def create(session: Session, data: SkillCreate):
-        skill = Skill(**data.dict())
-        session.add(skill)
-        session.commit()
-        session.refresh(skill)
-        return skill
-
+        return _service.create(session, data.dict())
+    
     @staticmethod
     def list_by_org(session: Session, org_id: int):
-        # join department → only skills from this org
+        # Note: This requires a join with Department
+        # For now, using the old implementation
+        from sqlmodel import select
+        from app.db.models import Department
         return session.exec(
             select(Skill).join(Department).where(Department.org_id == org_id)
         ).all()
-
+    
     @staticmethod
     def list_all(session: Session):
-        return session.exec(select(Skill)).all()
-
+        return _service.list_all(session, limit=1000)
+    
     @staticmethod
     def get(session: Session, skill_id: str):
-        return session.get(Skill, skill_id)
-
+        return _service.get(session, skill_id)
+    
     @staticmethod
     def update(session: Session, skill_id: str, data: SkillCreate):
-        skill = session.get(Skill, skill_id)
-        if not skill:
-            return None
-
-        skill.skill_name = data.skill_name
-        skill.required_certification = data.required_certification
-        skill.department_id = data.department_id
-
-        session.add(skill)
-        session.commit()
-        session.refresh(skill)
-        return skill
-
+        return _service.update(session, skill_id, data.dict())
+    
     @staticmethod
     def delete(session: Session, skill_id: str):
-        skill = session.get(Skill, skill_id)
-        if not skill:
-            return False
+        return _service.delete(session, skill_id)
 
-        session.delete(skill)
-        session.commit()
-        return True

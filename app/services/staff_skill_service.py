@@ -64,18 +64,3 @@ class StaffSkillService:
         session.delete(record)
         session.commit()
         return True
-
-    @staticmethod
-    def get_skill(session: Session, skill_id: UUID):
-        return session.get(Skill, skill_id)
-
-    @staticmethod
-    def get_staff(session: Session, staff_id: str):
-        return session.get(Staff, staff_id)
-
-    @staticmethod
-    def get_department_by_skill(session: Session, skill_id: UUID):
-        skill = session.get(Skill, skill_id)
-        if not skill:
-            return None
-        return session.get(Department, skill.department_id)

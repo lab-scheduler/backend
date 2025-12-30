@@ -57,11 +57,13 @@ def create_shift(
 # ---------------------------------------------------------
 # LIST SHIFTS
 # ---------------------------------------------------------
-@router.get("", response_model=list[ShiftRead], dependencies=[Security(security)])
+@router.get("", dependencies=[Security(security)])
 def list_shifts(
     org_slug: str,
     start_date: str = None,
     end_date: str = None,
+    skip: int = 0,
+    limit: int = 50,
     session: Session = Depends(get_session),
     current: dict = Depends(get_current_user)
 ):
@@ -69,19 +71,25 @@ def list_shifts(
     org = get_org_by_slug(org_slug, session)
 
     if current.get("role") == "STAFF":
-        # Staff only sees shifts assigned to them
-        stmt = """
-        SELECT s.*
-        FROM scheduler_dev.shifts s
-        JOIN scheduler_dev.shiftassignment sa
-            ON sa.shift_id = s.id
-        WHERE sa.employee_id = :emp
-        """
-        rows = session.exec(stmt, {"emp": current["employee_id"]}).all()
+        # Staff only sees shifts assigned to them - use ORM instead of raw SQL
+        from sqlmodel import select
+        from app.db.models import Shift, ShiftAssignment
+        
+        # Get total count
+        total_stmt = select(func.count(Shift.id)).join(ShiftAssignment).where(
+            ShiftAssignment.employee_id == current["employee_id"]
+        )
+        total = session.exec(total_stmt).one()
+        
+        # Get paginated shifts
+        stmt = select(Shift).join(ShiftAssignment).where(
+            ShiftAssignment.employee_id == current["employee_id"]
+        ).offset(skip).limit(limit)
+        shifts = session.exec(stmt).all()
 
         # serialize required skills
         serialized_shifts = []
-        for sh in rows:
+        for sh in shifts:
             shift_data = {
                 "id": sh.id,
                 "shift_date": sh.shift_date,
@@ -95,13 +103,28 @@ def list_shifts(
                 "required_skills": ShiftService.serialize_required_skills(sh)
             }
             serialized_shifts.append(shift_data)
-        return serialized_shifts
+        
+        return {
+            "ok": True,
+            "data": serialized_shifts,
+            "pagination": {
+                "total": total,
+                "skip": skip,
+                "limit": limit,
+                "has_more": (skip + len(serialized_shifts)) < total
+            }
+        }
 
     # Manager / Admin
+    from sqlmodel import func
     s = date.fromisoformat(start_date) if start_date else None
     e = date.fromisoformat(end_date) if end_date else None
 
-    shifts = ShiftService.list_by_org(session, org.id, s, e)
+    # Get total count
+    total = ShiftService.count_by_org(session, org.id, s, e)
+    
+    # Get paginated shifts
+    shifts = ShiftService.list_by_org(session, org.id, s, e, skip=skip, limit=limit)
     serialized_shifts = []
     for sh in shifts:
         shift_data = {
@@ -118,7 +141,16 @@ def list_shifts(
         }
         serialized_shifts.append(shift_data)
 
-    return serialized_shifts
+    return {
+        "ok": True,
+        "data": serialized_shifts,
+        "pagination": {
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + len(serialized_shifts)) < total
+        }
+    }
 
 
 # ---------------------------------------------------------

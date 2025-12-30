@@ -70,7 +70,9 @@ class ShiftService:
         session: Session,
         org_id: int,
         start: Optional[date] = None,
-        end: Optional[date] = None
+        end: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 50
     ):
         stmt = (
             select(Shift)
@@ -78,10 +80,7 @@ class ShiftService:
             .where(Department.org_id == org_id)
             .options(
                 joinedload(Shift.required_skills).joinedload(ShiftRequiredSkill.skill),
-                # Load department details
                 joinedload(Shift.department),
-                # Uncomment if you need assignments in the response
-                # joinedload(Shift.assignments)
             )
         )
 
@@ -89,9 +88,34 @@ class ShiftService:
             stmt = stmt.where(Shift.shift_date >= start)
         if end:
             stmt = stmt.where(Shift.shift_date <= end)
+        
+        # Add pagination
+        stmt = stmt.offset(skip).limit(limit)
 
         # Use unique() to deduplicate results from JOINs
         return session.exec(stmt).unique().all()
+    
+    @staticmethod
+    def count_by_org(
+        session: Session,
+        org_id: int,
+        start: Optional[date] = None,
+        end: Optional[date] = None
+    ) -> int:
+        """Get total count of shifts for pagination"""
+        from sqlmodel import func
+        stmt = (
+            select(func.count(Shift.id))
+            .join(Department, Shift.department_id == Department.id)
+            .where(Department.org_id == org_id)
+        )
+        
+        if start:
+            stmt = stmt.where(Shift.shift_date >= start)
+        if end:
+            stmt = stmt.where(Shift.shift_date <= end)
+        
+        return session.exec(stmt).one()
 
     # ---------------------------------------------------------
     # BUILD SERIALIZED REQUIRED SKILLS
