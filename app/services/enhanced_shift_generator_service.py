@@ -139,61 +139,67 @@ class EnhancedShiftGeneratorService:
         days_in_month = calendar.monthrange(start_date.year, start_date.month)[1]
         days_remaining_in_month = days_in_month - start_date.day + 1
 
-        while current_date <= end_date and days_remaining_in_month > 0:
-            # Check if this is a work day (weekdays or based on rotation)
-            if current_date.weekday() < 5:  # Monday to Friday
-                # Generate all shift types for this department
-                for shift_type in rule.get("shift_types", []):
-                    # Find available staff
-                    for i in range(rule.get("max_staff", 1)):
-                        if i < len(available_staff):
-                            staff_id = available_staff[i]
+        try:
+            while current_date <= end_date and days_remaining_in_month > 0:
+                # Check if this is a work day (weekdays or based on rotation)
+                if current_date.weekday() < 5:  # Monday to Friday
+                    # Generate all shift types for this department
+                    for shift_type in rule.get("shift_types", []):
+                        # Find available staff
+                        for i in range(rule.get("max_staff", 1)):
+                            if i < len(available_staff):
+                                staff_id = available_staff[i]
 
-                            # Create shift in database
-                            shift = Shift(
-                                org_id=org_id,
-                                shift_date=current_date,
-                                shift_type=shift_type,
-                                department_id=rule["department_id"],
-                                min_staff=rule.get("min_staff", 1),
-                                max_staff=rule.get("max_staff", 1),
-                                priority=rule.get("priority", 1),
-                                hours=8  # 8-hour shifts
-                            )
-                            session.add(shift)
-                            session.commit()
-                            session.refresh(shift)
-
-                            # Update staff workload
-                            staff_workload_info[staff_id]["assigned_shifts"] += 1
-                            staff_workload_info[staff_id]["max_shifts_remaining"] -= 1
-                            staff_workload_info[staff_id]["work_days"].append(current_date)
-                            staff_workload_info[staff_id]["last_worked_date"] = current_date
-
-                            # Create shift requirement record
-                            for skill_id in rule.get("required_skill_ids", []):
-                                from app.db.models import ShiftRequiredSkill
-                                req = ShiftRequiredSkill(
-                                    shift_id=shift.id,
-                                    skill_id=skill_id
+                                # Create shift in database
+                                shift = Shift(
+                                    org_id=org_id,
+                                    shift_date=current_date,
+                                    shift_type=shift_type,
+                                    department_id=rule["department_id"],
+                                    min_staff=rule.get("min_staff", 1),
+                                    max_staff=rule.get("max_staff", 1),
+                                    priority=rule.get("priority", 1),
+                                    hours=8  # 8-hour shifts
                                 )
-                                session.add(req)
-                            session.commit()
+                                session.add(shift)
+                                session.flush()  # Get shift.id without committing
 
-                            shifts_created.append({
-                                "date": current_date.isoformat(),
-                                "shift_id": shift.id,
-                                "type": shift_type,
-                                "staff": staff_id,
-                                "department": rule["department_id"]
-                            })
+                                # Update staff workload
+                                staff_workload_info[staff_id]["assigned_shifts"] += 1
+                                staff_workload_info[staff_id]["max_shifts_remaining"] -= 1
+                                staff_workload_info[staff_id]["work_days"].append(current_date)
+                                staff_workload_info[staff_id]["last_worked_date"] = current_date
 
-                days_remaining_in_month -= 1
-            else:
-                # Weekend - rotate to next month if needed
-                pass
+                                # Create shift requirement record
+                                for skill_id in rule.get("required_skill_ids", []):
+                                    from app.db.models import ShiftRequiredSkill
+                                    req = ShiftRequiredSkill(
+                                        shift_id=shift.id,
+                                        skill_id=skill_id
+                                    )
+                                    session.add(req)
 
-            current_date += timedelta(days=1)
+                                shifts_created.append({
+                                    "date": current_date.isoformat(),
+                                    "shift_id": shift.id,
+                                    "type": shift_type,
+                                    "staff": staff_id,
+                                    "department": rule["department_id"]
+                                })
+
+                    days_remaining_in_month -= 1
+                else:
+                    # Weekend - rotate to next month if needed
+                    pass
+
+                current_date += timedelta(days=1)
+
+            # Single commit for all shifts and skills
+            session.commit()
+            
+        except Exception as e:
+            session.rollback()
+            raise ValueError(f"Failed to generate balanced department shifts: {str(e)}")
 
         return {
             "count": len(shifts_created),
