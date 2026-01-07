@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Demo & environment
     APP_ENV: str = "development"
     SECRET_KEY: str = "..."
-    VITE_API_URL: str = "http://localhost:8000"
+    VITE_API_URL: str = os.environ.get("VITE_API_URL")
 
     class Config:
         env_file = ".env"

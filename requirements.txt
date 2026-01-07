@@ -28,4 +28,4 @@ python-multipart>=0.0.5
 # Logging
 loguru>=0.7.0
 
-psycopg2>=2.9.11
+# psycopg2>=2.9.11
