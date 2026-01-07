@@ -33,11 +33,26 @@ MAX_OVERFLOW = int(os.getenv("MAX_OVERFLOW", "20"))
 # For SQLite we keep NullPool to avoid 'sqlite unable to use pool' issues
 connect_args = {}
 engine_kwargs = {"echo": DB_ECHO}
+
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
     engine = create_engine(DATABASE_URL, connect_args=connect_args, poolclass=NullPool, **engine_kwargs)
 else:
-    engine = create_engine(DATABASE_URL, pool_size=POOL_SIZE, max_overflow=MAX_OVERFLOW, **engine_kwargs)
+    # PostgreSQL connection settings for Neon and other cloud databases
+    connect_args = {
+        "connect_timeout": 10,
+        "options": "-c timezone=utc"
+    }
+    
+    engine_kwargs.update({
+        "pool_size": POOL_SIZE,
+        "max_overflow": MAX_OVERFLOW,
+        "pool_pre_ping": True,  # Test connections before using them
+        "pool_recycle": 300,     # Recycle connections after 5 minutes
+        "connect_args": connect_args
+    })
+    
+    engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 
 def get_session() -> Generator[Session, None, None]:
