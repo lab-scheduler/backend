@@ -40,8 +40,7 @@ class ShiftService:
         )
 
         session.add(shift)
-        session.commit()
-        session.refresh(shift)
+        session.flush()  # Get shift.id without committing to database
 
         # Add required skills (if any)
         for skill_id in payload.required_skill_ids or []:
@@ -51,6 +50,7 @@ class ShiftService:
             )
             session.add(sr)
 
+        # Single commit for both shift and required skills
         session.commit()
         session.refresh(shift)
         return shift
