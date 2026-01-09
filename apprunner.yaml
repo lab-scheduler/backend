@@ -1,0 +1,18 @@
+version: 1.0
+runtime: python311
+build:
+  commands:
+    build:
+      - python3.11 -m ensurepip --upgrade
+      - python3.11 -m pip install -r requirements.txt
+      - python3.11 -m pip install gunicorn
+run:
+  runtime-version: 3.11
+  pre-run:
+    - pip3 install uvicorn
+    - pip3 install -r requirements.txt
+    - which uvicorn
+  command: uvicorn app.main:app --host 0.0.0.0 --port 8080
+  network: 
+    port: 8080
+    env: 8080
