@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
             "http://localhost:3000",
             "http://localhost:5173",
             "http://localhost:18000",
+            "https://rpawe9zvpj.ap-southeast-1.awsapprunner.com",
             "https://localhost:3000",
             "https://localhost:5173",
             "https://localhost:18000",
@@ -137,3 +138,4 @@ def create_app() -> FastAPI:
 
 # Instantiate
 app = create_app()
+
