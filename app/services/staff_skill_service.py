@@ -64,3 +64,19 @@ class StaffSkillService:
         session.delete(record)
         session.commit()
         return True
+
+    @staticmethod
+    def get_staff(session: Session, staff_id: str):
+        """Get staff member by ID"""
+        return session.get(Staff, staff_id)
+
+    @staticmethod
+    def get_skill(session: Session, skill_id: int):
+        """Get skill by ID"""
+        return session.get(Skill, skill_id)
+
+    @staticmethod
+    def get_department_by_skill(session: Session, skill_id: int):
+        """Get department associated with a skill"""
+        skill = session.get(Skill, skill_id)
+        return session.get(Department, skill.department_id) if skill else None

@@ -20,11 +20,13 @@ class EnhancedAnalysisService:
         shifts = adapter.load_shifts(start, end)
         departments = EnhancedAnalysisService._load_departments(session, org_id)
         assignments = EnhancedAnalysisService._load_assignments(session, org_id, start, end)
+        skills = EnhancedAnalysisService._load_skills(session, org_id)
 
         # Pre-compute lookups for performance
         staff_map = {s.employee_id: s for s in staff_list}
         dept_map = {d.id: d for d in departments}
         shift_map = {s.id: s for s in shifts}
+        skill_map = {sk.id: sk for sk in skills}
 
         # Pre-group assignments by shift and staff for O(1) lookups
         assignments_by_shift = {}
@@ -65,7 +67,7 @@ class EnhancedAnalysisService:
                 departments, shifts_by_dept, assignments_by_shift, staff_map, dept_map
             ),
             "staff_details": EnhancedAnalysisService._analyze_staff_optimized(
-                staff_list, assignments_by_staff, shift_map, dept_map
+                staff_list, assignments_by_staff, shift_map, dept_map, skill_map
             ),
             "shifts": EnhancedAnalysisService._detail_shifts_optimized(
                 shifts, assignments_by_shift, dept_map, staff_map
@@ -79,6 +81,7 @@ class EnhancedAnalysisService:
         }
 
         return {"ok": True, "report": report}
+
 
     @staticmethod
     def _generate_meta(org_id: int, start: date, end: date) -> Dict:
@@ -471,6 +474,18 @@ class EnhancedAnalysisService:
         return adapter.load_assignments_bulk(start, end)
 
     @staticmethod
+    def _load_skills(session, org_id: int):
+        """Load all skills for departments in the organization"""
+        from sqlmodel import select
+        from app.db.models import Skill
+        return session.exec(
+            select(Skill)
+            .join(Department, Skill.department_id == Department.id)
+            .where(Department.org_id == org_id)
+        ).all()
+
+
+    @staticmethod
     def _generate_staff_recommendations(staff, staff_shifts, total_hours, underutilized_skills, overtime_hours):
         """Generate personalized recommendations for staff member"""
         recommendations = []
@@ -633,7 +648,7 @@ class EnhancedAnalysisService:
         return dept_analysis
 
     @staticmethod
-    def _analyze_staff_optimized(staff_list, assignments_by_staff, shift_map, dept_map):
+    def _analyze_staff_optimized(staff_list, assignments_by_staff, shift_map, dept_map, skill_map):
         """Optimized staff analysis using pre-grouped assignments"""
         staff_analysis = []
 
@@ -650,19 +665,31 @@ class EnhancedAnalysisService:
             total_hours = len(staff_assignments) * 8
             overtime_hours = max(0, total_hours - 40)
 
-            # Skills analysis
-            proficient_skills = [f"Skill_{skill_id}_L{level}"
-                               for skill_id, level in staff.skills.items()]
+            # Skills analysis - use actual skill names
+            proficient_skills = []
+            for skill_id, level in staff.skills.items():
+                skill = skill_map.get(skill_id)
+                if skill:
+                    proficient_skills.append(f"{skill.skill_name} ({level})")
+                else:
+                    # Fallback if skill not found
+                    proficient_skills.append(f"Skill_{skill_id} ({level})")
 
             # Get skill IDs from assigned shifts
             assigned_skill_ids = set()
             for shift in staff_shifts:
                 assigned_skill_ids.update(shift.required_skill_ids)
 
-            utilized_skills = [f"Skill_{skill_id}" for skill_id in staff.skills
-                             if skill_id in assigned_skill_ids]
-            underutilized_skills = [f"Skill_{skill_id}" for skill_id in staff.skills
-                                  if skill_id not in assigned_skill_ids]
+            utilized_skills = []
+            underutilized_skills = []
+            for skill_id in staff.skills:
+                skill = skill_map.get(skill_id)
+                skill_name = skill.skill_name if skill else f"Skill_{skill_id}"
+                
+                if skill_id in assigned_skill_ids:
+                    utilized_skills.append(skill_name)
+                else:
+                    underutilized_skills.append(skill_name)
 
             skill_match_rate = (len(utilized_skills) / len(staff.skills) * 100) if staff.skills else 0
 
@@ -714,6 +741,7 @@ class EnhancedAnalysisService:
             })
 
         return staff_analysis
+
 
     @staticmethod
     def _detail_shifts_optimized(shifts, assignments_by_shift, dept_map, staff_map):

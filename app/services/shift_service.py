@@ -203,3 +203,76 @@ class ShiftService:
         session.delete(shift)
         session.commit()
         return True
+
+    # ---------------------------------------------------------
+    # DELETE SHIFTS BY DATE RANGE
+    # ---------------------------------------------------------
+    @staticmethod
+    def delete_by_range(
+        session: Session,
+        org_id: int,
+        start_date: date,
+        end_date: date,
+        department_id: Optional[int] = None
+    ):
+        """
+        Delete all shifts within a date range, optionally filtered by department.
+        Returns count of deleted shifts and assignments.
+        """
+        # Build query to find shifts
+        stmt = (
+            select(Shift)
+            .join(Department, Shift.department_id == Department.id)
+            .where(Department.org_id == org_id)
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+        )
+
+        # Add department filter if provided
+        if department_id is not None:
+            # Validate department belongs to org
+            dept = session.get(Department, department_id)
+            if not dept or dept.org_id != org_id:
+                raise ValueError("Department does not belong to this organization")
+            stmt = stmt.where(Shift.department_id == department_id)
+
+        # Get all shifts to delete
+        shifts_to_delete = session.exec(stmt).all()
+        shift_ids = [shift.id for shift in shifts_to_delete]
+
+        if not shift_ids:
+            return {
+                "shifts_deleted": 0,
+                "assignments_deleted": 0
+            }
+
+        # Count assignments before deletion
+        from sqlmodel import func
+        assignments_count = session.exec(
+            select(func.count(ShiftAssignment.id)).where(
+                ShiftAssignment.shift_id.in_(shift_ids)
+            )
+        ).one()
+
+        # Delete related assignments
+        session.query(ShiftAssignment).filter(
+            ShiftAssignment.shift_id.in_(shift_ids)
+        ).delete(synchronize_session=False)
+
+        # Delete related required skills
+        session.query(ShiftRequiredSkill).filter(
+            ShiftRequiredSkill.shift_id.in_(shift_ids)
+        ).delete(synchronize_session=False)
+
+        # Delete shifts
+        session.query(Shift).filter(
+            Shift.id.in_(shift_ids)
+        ).delete(synchronize_session=False)
+
+        session.commit()
+
+        return {
+            "shifts_deleted": len(shift_ids),
+            "assignments_deleted": assignments_count
+        }
+

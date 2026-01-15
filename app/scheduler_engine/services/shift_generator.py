@@ -35,6 +35,15 @@ class ShiftGeneratorService:
                         raise ValueError(f"Missing 'department_id' in department rule: {rule}")
                     
                     dept_id = rule["department_id"]
+                    
+                    # Validate department exists and belongs to organization
+                    from app.db.models import Department
+                    dept = session.get(Department, dept_id)
+                    if not dept:
+                        raise ValueError(f"Department with ID {dept_id} does not exist")
+                    if dept.org_id != org_id:
+                        raise ValueError(f"Department {dept_id} does not belong to organization {org_id}")
+                    
                     shift_types = rule.get("shift_types", ["DAY"])
                     min_staff = rule.get("min_staff", 1)
                     max_staff = rule.get("max_staff", 1)
@@ -91,6 +100,15 @@ class ShiftGeneratorService:
 
         try:
             for pl in pipelines:
+                # Validate department exists and belongs to organization
+                from app.db.models import Department
+                dept_id = pl["department_id"]
+                dept = session.get(Department, dept_id)
+                if not dept:
+                    raise ValueError(f"Department with ID {dept_id} does not exist")
+                if dept.org_id != org_id:
+                    raise ValueError(f"Department {dept_id} does not belong to organization {org_id}")
+                
                 # Create pipeline record
                 pipe = WorkPipeline(
                     org_id=org_id,

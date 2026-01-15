@@ -52,6 +52,13 @@ class LoginRequest(SQLModel):
 
 
 class AuthRegister(SQLModel):
+    """
+    User registration schema.
+    
+    Note on employee_id:
+    - ADMIN users: employee_id is optional (can be None or any value)
+    - STAFF/MANAGER users: employee_id is required and must reference an existing staff record
+    """
     employee_id: Optional[str] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None

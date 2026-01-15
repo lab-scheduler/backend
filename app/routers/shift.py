@@ -231,6 +231,47 @@ def update_shift(
 
 
 # ---------------------------------------------------------
+# DELETE SHIFTS BY DATE RANGE
+# ---------------------------------------------------------
+@router.delete("/range", dependencies=[Security(security)])
+def delete_shifts_by_range(
+    org_slug: str,
+    start_date: str,
+    end_date: str,
+    department_id: int = None,
+    session: Session = Depends(get_session),
+    current: dict = Depends(get_current_user)
+):
+    """
+    Delete shifts within a date range, optionally filtered by department.
+    Useful for undoing shift generation mistakes.
+    """
+    if current.get("role") not in ("MANAGER", "ADMIN"):
+        raise HTTPException(403, "Forbidden")
+
+    org = get_org_by_slug(org_slug, session)
+
+    try:
+        from datetime import date
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
+
+    try:
+        result = ShiftService.delete_by_range(session, org.id, start, end, department_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    return {
+        "ok": True,
+        "deleted": result["shifts_deleted"],
+        "assignments_deleted": result["assignments_deleted"],
+        "message": f"Deleted {result['shifts_deleted']} shifts and {result['assignments_deleted']} assignments"
+    }
+
+
+# ---------------------------------------------------------
 # DELETE SHIFT
 # ---------------------------------------------------------
 @router.delete("/{shift_id}", dependencies=[Security(security)])

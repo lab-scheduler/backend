@@ -46,6 +46,31 @@ def _ensure_allowed_to_manage(session: Session, current: dict, staff: Staff, ski
 
 
 # -------------------------------------------------------------
+# LIST all staff skill records for organization
+# GET /{org_slug}/staff-skills
+# -------------------------------------------------------------
+@router.get("", response_model=list[StaffSkillRead], dependencies=[Security(security)])
+def list_all_staff_skills(
+    org_slug: str,
+    session: Session = Depends(get_session),
+    current: dict = Depends(get_current_user),
+):
+    """List all staff-skills for the organization. Only accessible by ADMIN and MANAGER."""
+    
+    # Only ADMIN and MANAGER can list all
+    if current.get("role") not in ["ADMIN", "MANAGER"]:
+        raise HTTPException(403, "Forbidden")
+    
+    org = get_org_by_slug(org_slug, session)
+    
+    # MANAGER: only see staff-skills from their org
+    if current.get("role") == "MANAGER" and current.get("org_id") != org.id:
+        raise HTTPException(403, "Managers can only view staff-skills from their organization")
+    
+    return StaffSkillService.list_by_org(session, org.id)
+
+
+# -------------------------------------------------------------
 # LIST staff skill records
 # GET /{org_slug}/staff-skills/{staff_id}
 # -------------------------------------------------------------
